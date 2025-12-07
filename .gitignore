@@ -1,0 +1,21 @@
+# Local Terraform directories
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# Auto-generated crash files
+crash.log
+
+# Private variables
+*.tfvars
+*.auto.tfvars
+
+# Lock files (optional, safer to commit)
+ .terraform.lock.hcl
+
+# OS files
+.DS_Store
+
+# Python stuff (if using lambda + Python)
+__pycache__/
+venv/
