@@ -3,11 +3,30 @@ variable "aws_vpc_cidr" {
   type        = string
   default     = "10.0.0.0/16"
 }
-variable "db_username" {
-  description = "The username for the RDS database"
-  type        = string 
+variable "DB_NAME" {
+  description = "Name of the database schema"
+  type        = string
 }
-variable "db_password" {
-  type      = string
-  sensitive = true
+variable "DB_PASSWORD" {
+  description = "Master password for the RDS instance"
+  type        = string
+  sensitive   = true
+}
+variable "DB_PORT" {
+  description = "Port the database listens on"
+  type        = string
+  default     = "3306"
+}
+variable "DB_HOST" {
+  description = "Hostname of the RDS instance"
+  type        = string
+}
+variable "DB_USER" {
+  description = "Database user for application access"
+  type        = string
+}
+variable "aws_region" {
+  description = "The AWS region to deploy resources in"
+  type        = string
+  default     = "us-west-2" 
 }
