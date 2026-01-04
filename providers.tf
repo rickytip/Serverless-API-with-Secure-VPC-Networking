@@ -11,3 +11,8 @@ provider "aws" {
   region  = "us-west-2"
   profile = "my-admin-profile"
 }
+# Add on for WAF Configuration  
+provider "aws" {
+  alias  = "use1"
+  region = "us-east-1"
+}

@@ -101,7 +101,7 @@ resource "aws_route_table_association" "DBSubnet2Association" {
   subnet_id      = aws_subnet.DBSubnet2.id
   route_table_id = aws_route_table.PrivateRouteTable.id
 }
-#Security Group for RDS Instance
+#Security Group for DB Instance
 resource "aws_security_group" "DB_SG" {
   name        = "DB_SG"
   description = "Security group for RDS instance"
@@ -174,23 +174,19 @@ resource "aws_iam_role" "lambda_role" {
       {
         Action = "sts:AssumeRole"
         Effect = "Allow"
-        Sid    = ""
+        Sid    = "AllowLambdaAssumeRole"
         Principal = {
           Service = "lambda.amazonaws.com"
         }
       }
     ]
   })
-
-  tags = {
-    tag-key = "tag-value"
-  }
 }
-# Attach the AWSLambdaVPCAccessExecutionRole managed policy to the role
-resource "aws_iam_role_policy_attachment" "CloudWatch_logs" {
+# Attach the AWSLambdaBasicExecutionRole managed policy to the role
+resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
   role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+} 
 # Create Lambda Function
 resource "aws_lambda_function" "Prod_Lambda" {
   filename         = "lambda_package.zip"
@@ -290,6 +286,40 @@ resource "aws_apigatewayv2_route" "lambda_route" {
 # Cognito user pool for authentication
 resource "aws_cognito_user_pool" "user_pool" {
   name = "serverless-api-user-pool"
+
+  # Password policy
+  password_policy {
+    minimum_length    = 8
+    require_uppercase = true
+    require_lowercase = true
+    require_numbers   = true
+    require_symbols   = true  
+  }
+  # Account recovery settings
+  account_recovery_setting {
+    recovery_mechanism {
+      name     = "verified_email"
+      priority = 1    
+    }
+  }
+  # Email Verification 
+  auto_verified_attributes = ["email"]
+  username_attributes = ["email"]
+  #Email configuration using Cognito default email sender
+  email_configuration {
+    email_sending_account = "COGNITO_DEFAULT"
+  }
+  schema {
+    attribute_data_type      = "String"
+    name                     = "email"
+    required                 = true
+    mutable                  = false
+  } 
+  # MFA configuration
+  mfa_configuration = "OPTIONAL"
+  software_token_mfa_configuration {
+    enabled = true
+  }
 }
 # Cognito user pool client
 resource "aws_cognito_user_pool_client" "user_pool_client" {
@@ -309,7 +339,7 @@ resource "aws_apigatewayv2_authorizer" "cognito_authorizer" {
   identity_sources = ["$request.header.Authorization"]
   jwt_configuration {
     audience = [aws_cognito_user_pool_client.user_pool_client.id]
-    issuer   = aws_cognito_user_pool.user_pool.endpoint
+    issuer   = "https://${aws_cognito_user_pool.user_pool.endpoint}"
   }
 }
 # Update API Gateway Route to use Cognito Authorizer
@@ -322,10 +352,11 @@ resource "aws_apigatewayv2_route" "lambda_route_with_auth" {
 }
 # cloudfront in front of api gateway
 resource "aws_cloudfront_distribution" "api_distribution" {
+  web_acl_id = aws_wafv2_web_acl.api_waf.arn
   origin {
-    domain_name = aws_apigatewayv2_api.http_api.api_endpoint
+    domain_name =  trimprefix( trimsuffix(aws_apigatewayv2_api.http_api.api_endpoint, "/"), "https://")
     origin_id   = "api-gateway-origin"  
-    origin_path = "/"
+    origin_path = ""
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -375,17 +406,14 @@ resource "aws_wafv2_web_acl" "api_waf" {
     sampled_requests_enabled   = true
   }
 }
-# Associate WAF with CloudFront Distribution
-resource "aws_wafv2_web_acl_association" "waf_association" {
-  resource_arn = aws_cloudfront_distribution.api_distribution.arn
-  web_acl_arn  = aws_wafv2_web_acl.api_waf.arn
-} 
 # WAFv2 Rule Group with basic rules
 resource "aws_wafv2_rule_group" "basic_rules" {
   name        = "basic-rules"
   description = "Basic rules for WAF"
   scope       = "CLOUDFRONT"
   capacity    = 50
+  region = "us-east-1"
+
   visibility_config {
     cloudwatch_metrics_enabled = true
     metric_name                = "basicRules"
